@@ -280,7 +280,254 @@ trigger_kavita_scan() {
     fi
 }
 
-# Main
+# Funzione per inviare notifiche (opzionale)
+send_notification() {
+    local title="$1"
+    local message="$2"
+    
+    # Discord webhook (se configurato)
+    if [[ -n "${DISCORD_WEBHOOK_URL}" ]]; then
+        curl -s -X POST "${DISCORD_WEBHOOK_URL}" \
+            -H "Content-Type: application/json" \
+            -d "{\"content\":\"**${title}**\n${message}\"}" > /dev/null
+    fi
+    
+    # Telegram (se configurato)
+    if [[ -n "${TELEGRAM_BOT_TOKEN}" ]] && [[ -n "${TELEGRAM_CHAT_ID}" ]]; then
+        curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TELEGRAM_CHAT_ID}" \
+            -d "text=*${title}*%0A${message}" \
+            -d "parse_mode=Markdown" > /dev/null
+    fi
+}
+
+# Funzione per download
+download_webtoon() {
+    local url="$1"
+    shift
+    local extra_args=("$@")
+    
+    if [[ -z "${url}" ]]; then
+        echo -e "${RED}Errore: URL richiesto${NC}"
+        exit 1
+    fi
+    
+    # Crea directory downloads se non esiste
+    mkdir -p "${DOWNLOADS_DIR}"
+    
+    # Prepara argomenti con defaults dalla configurazione
+    local download_args=()
+    local has_concurrent_chapters=false
+    local has_concurrent_images=false
+    local has_format=false
+    local has_quality=false
+    
+    # Controlla se gli argomenti sono già specificati
+    for arg in "${extra_args[@]}"; do
+        case "$arg" in
+            "--concurrent-chapters") has_concurrent_chapters=true ;;
+            "--concurrent-images") has_concurrent_images=true ;;
+            "--save-as"|"--format") has_format=true ;;
+            "--quality") has_quality=true ;;
+        esac
+    done
+    
+    # Aggiungi defaults se non specificati
+    if [[ "$has_concurrent_chapters" == "false" ]] && [[ -n "${CONCURRENT_CHAPTERS}" ]]; then
+        download_args+=("--concurrent-chapters" "${CONCURRENT_CHAPTERS}")
+    fi
+    
+    if [[ "$has_concurrent_images" == "false" ]] && [[ -n "${CONCURRENT_IMAGES}" ]]; then
+        download_args+=("--concurrent-images" "${CONCURRENT_IMAGES}")
+    fi
+    
+    if [[ "$has_format" == "false" ]] && [[ -n "${DEFAULT_FORMAT}" ]]; then
+        download_args+=("--save-as" "${DEFAULT_FORMAT}")
+    fi
+    
+    if [[ "$has_quality" == "false" ]] && [[ -n "${DEFAULT_QUALITY}" ]]; then
+        download_args+=("--quality" "${DEFAULT_QUALITY}")
+    fi
+    
+    # Combina argomenti utente + defaults
+    local all_args=("${extra_args[@]}" "${download_args[@]}")
+    
+    log "Avvio download completo: ${url}"
+    log "Parametri: Capitoli contemporanei=${CONCURRENT_CHAPTERS:-"default"}, Immagini contemporanee=${CONCURRENT_IMAGES:-"default"}"
+    echo -e "${BLUE}Scaricando tutti gli episodi e aggiungendo al monitoraggio automatico...${NC}"
+    echo -e "${YELLOW}🚀 Concorrenza: ${CONCURRENT_CHAPTERS:-"default"} capitoli, ${CONCURRENT_IMAGES:-"default"} immagini per capitolo${NC}"
+    
+    # Esegui il download con poetry
+    cd "${SCRIPT_DIR}"
+    if poetry run webtoon-downloader "${url}" --output "${DOWNLOADS_DIR}" "${all_args[@]}"; then
+        log "✓ Download completato: ${url}"
+        
+        # Aggiungi automaticamente al monitoraggio per futuri --latest
+        add_to_monitoring_internal "${url}" "${extra_args[@]}"
+        
+        # Trigger Kavita scan
+        trigger_kavita_scan
+        
+        # Notifica (se configurato)
+        send_notification "Webtoon Download" "Download completato e aggiunto al monitoraggio: ${url}"
+        
+        echo -e "${GREEN}✓ Serie scaricata e aggiunta al monitoraggio automatico!${NC}"
+        
+        return 0
+    else
+        log "✗ Errore durante download: ${url}"
+        send_notification "Webtoon Error" "Errore download: ${url}"
+        return 1
+    fi
+}
+
+# Funzione interna per aggiungere URL al monitoraggio
+add_to_monitoring_internal() {
+    local url="$1"
+    shift
+    local extra_args=("$@")
+    
+    # Crea file cron se non esiste
+    touch "${CRON_CHECK_FILE}"
+    
+    # Controlla se URL già presente
+    if grep -Fxq "${url}" "${CRON_CHECK_FILE}"; then
+        log "URL già in monitoraggio: ${url}"
+        return 0
+    fi
+    
+    # Aggiungi URL con opzioni
+    echo "${url} ${extra_args[*]}" >> "${CRON_CHECK_FILE}"
+    log "URL aggiunto automaticamente al monitoraggio: ${url}"
+    
+    # Suggerisci di configurare il cron se non già fatto
+    if ! crontab -l 2>/dev/null | grep -q "webtoon-manager"; then
+        echo -e "${YELLOW}💡 Esegui '$0 setup-cron' per attivare il monitoraggio automatico ogni 6 ore${NC}"
+    fi
+}
+
+# Funzione per listare URLs monitorati
+list_monitored() {
+    if [[ ! -f "${CRON_CHECK_FILE}" ]] || [[ ! -s "${CRON_CHECK_FILE}" ]]; then
+        echo -e "${YELLOW}Nessun URL in monitoraggio${NC}"
+        return 0
+    fi
+    
+    echo -e "${BLUE}URLs in monitoraggio automatico:${NC}"
+    echo ""
+    local count=1
+    while IFS= read -r line; do
+        echo "${count}. ${line}"
+        ((count++))
+    done < "${CRON_CHECK_FILE}"
+}
+
+# Funzione per rimuovere URL dal monitoraggio
+remove_from_monitoring() {
+    local url="$1"
+    
+    if [[ -z "${url}" ]]; then
+        echo -e "${RED}Errore: URL richiesto${NC}"
+        exit 1
+    fi
+    
+    if [[ ! -f "${CRON_CHECK_FILE}" ]]; then
+        echo -e "${YELLOW}Nessun URL in monitoraggio${NC}"
+        return 0
+    fi
+    
+    # Rimuovi URL dal file
+    local temp_file="${CRON_CHECK_FILE}.tmp"
+    grep -v -F "${url}" "${CRON_CHECK_FILE}" > "${temp_file}" || true
+    mv "${temp_file}" "${CRON_CHECK_FILE}"
+    
+    log "URL rimosso dal monitoraggio: ${url}"
+    echo -e "${GREEN}✓ URL rimosso dal monitoraggio${NC}"
+}
+
+# Funzione per controllare aggiornamenti (usata dal cron)
+check_updates() {
+    if [[ ! -f "${CRON_CHECK_FILE}" ]] || [[ ! -s "${CRON_CHECK_FILE}" ]]; then
+        log "Nessuna serie in monitoraggio"
+        return 0
+    fi
+    
+    log "Inizio controllo automatico nuovi episodi (--latest)"
+    local new_episodes_found=false
+    local series_count=0
+    
+    while IFS= read -r line; do
+        if [[ -n "${line}" ]]; then
+            local url=$(echo "${line}" | awk '{print $1}')
+            local args=$(echo "${line}" | cut -d' ' -f2-)
+            ((series_count++))
+            
+            log "Controllo nuovi episodi per serie #${series_count}: ${url}"
+            
+            cd "${SCRIPT_DIR}"
+            # SEMPRE usa --latest per il monitoraggio automatico
+            local update_args=("--latest" "--output" "${DOWNLOADS_DIR}")
+            
+            # Aggiungi parametri di concorrenza se configurati
+            if [[ -n "${CONCURRENT_CHAPTERS}" ]]; then
+                update_args+=("--concurrent-chapters" "${CONCURRENT_CHAPTERS}")
+            fi
+            if [[ -n "${CONCURRENT_IMAGES}" ]]; then
+                update_args+=("--concurrent-images" "${CONCURRENT_IMAGES}")
+            fi
+            
+            if poetry run webtoon-downloader "${url}" "${update_args[@]}" ${args}; then
+                log "✓ Controllo episodi completato per serie #${series_count}"
+                new_episodes_found=true
+            else
+                log "✗ Errore durante controllo serie #${series_count}: ${url}"
+            fi
+        fi
+    done < "${CRON_CHECK_FILE}"
+    
+    if [[ "${new_episodes_found}" == "true" ]]; then
+        log "Nuovi episodi trovati! Triggering Kavita scan..."
+        trigger_kavita_scan
+        send_notification "Webtoon Updates" "Nuovi episodi scaricati automaticamente da ${series_count} serie monitorate"
+    else
+        log "Nessun nuovo episodio trovato nelle ${series_count} serie monitorate"
+    fi
+    
+    log "Controllo automatico completato"
+}
+
+# Funzione per configurare cron job di sistema
+setup_cron() {
+    local cron_line="0 */6 * * * cd \"${SCRIPT_DIR}\" && ./webtoon-manager-simple.sh check-updates >> \"${LOG_FILE}\" 2>&1"
+    
+    # Controlla se il cron job esiste già
+    if ! crontab -l 2>/dev/null | grep -q "webtoon-manager"; then
+        # Aggiungi al crontab di sistema
+        (crontab -l 2>/dev/null; echo "${cron_line}") | crontab -
+        log "Cron job di sistema configurato: controllo --latest ogni 6 ore"
+        echo -e "${GREEN}✓ Cron job di sistema configurato!${NC}"
+        echo -e "${BLUE}  → Controllo automatico ogni 6 ore alle: 00:00, 06:00, 12:00, 18:00${NC}"
+        echo -e "${BLUE}  → Usa solo --latest per nuovi episodi delle serie già scaricate${NC}"
+        
+        # Mostra il prossimo run time
+        echo -e "${YELLOW}💡 Controlla con 'crontab -l' per verificare${NC}"
+    else
+        echo -e "${YELLOW}Cron job già configurato${NC}"
+        echo -e "${BLUE}Controlla con: crontab -l${NC}"
+    fi
+}
+
+# Funzione per rimuovere cron job di sistema
+remove_cron() {
+    if crontab -l 2>/dev/null | grep -q "webtoon-manager"; then
+        crontab -l 2>/dev/null | grep -v "webtoon-manager" | crontab -
+        log "Cron job di sistema rimosso"
+        echo -e "${GREEN}✓ Cron job di sistema rimosso${NC}"
+        echo -e "${BLUE}Le serie rimangono in monitoraggio, ma non verranno più controllate automaticamente${NC}"
+    else
+        echo -e "${YELLOW}Nessun cron job trovato nel sistema${NC}"
+    fi
+}
 main() {
     local command="$1"
     
@@ -293,6 +540,28 @@ main() {
     load_config || echo -e "${YELLOW}Usa '$0 config' per configurare${NC}"
     
     case "${command}" in
+        "download")
+            shift
+            local url="$1"
+            shift
+            download_webtoon "${url}" "$@"
+            ;;
+        "list-monitored")
+            list_monitored
+            ;;
+        "remove-monitor")
+            shift
+            remove_from_monitoring "$1"
+            ;;
+        "check-updates")
+            check_updates
+            ;;
+        "setup-cron")
+            setup_cron
+            ;;
+        "remove-cron")
+            remove_cron
+            ;;
         "config")
             configure
             ;;
