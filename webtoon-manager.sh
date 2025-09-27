@@ -50,7 +50,17 @@ show_help() {
     echo "  - Il download manuale scarica TUTTI gli episodi e aggiunge la serie al monitoraggio"
     echo "  - Il monitoraggio automatico (cron) scarica solo gli episodi NUOVI (--latest)"
     echo ""
-    echo \"Esempi:\"\n    echo \"  $0 download 'https://www.webtoons.com/en/fantasy/tower-of-god/list?title_no=95' --format cbz\"\n    echo \"  $0 download 'URL' --concurrent-chapters 5 --concurrent-images 20 --quality 90\"\n    echo \"  $0 setup-cron  # Configura controllo automatico ogni 6 ore\"\n    echo \"  $0 list-monitored  # Vedi quali serie sono monitorate\"\n    echo \"\"\n    echo \"Performance Tips:\"\n    echo \"  • --concurrent-chapters 1-3: Sicuro per la maggior parte dei server\"\n    echo \"  • --concurrent-images 5-15: Bilanciamento velocità/stabilità\"\n    echo \"  • Valori troppo alti possono causare ban temporanei\"\n}"
+    echo "Esempi:"
+    echo "  $0 download 'https://www.webtoons.com/en/fantasy/tower-of-god/list?title_no=95' --format cbz"
+    echo "  $0 download 'URL' --concurrent-chapters 5 --concurrent-images 20 --quality 90"
+    echo "  $0 setup-cron  # Configura controllo automatico ogni 6 ore"
+    echo "  $0 list-monitored  # Vedi quali serie sono monitorate"
+    echo ""
+    echo "Performance Tips:"
+    echo "  • --concurrent-chapters 1-3: Sicuro per la maggior parte dei server"
+    echo "  • --concurrent-images 5-15: Bilanciamento velocità/stabilità"
+    echo "  • Valori troppo alti possono causare ban temporanei"
+}"
 }
 
 # Funzione per creare config di default
@@ -494,7 +504,8 @@ setup_cron() {
     local cron_line="0 */6 * * * cd \"${SCRIPT_DIR}\" && ./webtoon-manager.sh check-updates >> \"${LOG_FILE}\" 2>&1"
     
     # Controlla se il cron job esiste già
-    if ! crontab -l 2>/dev/null | grep -q "webtoon-manager.sh"; then\n        # Aggiungi al crontab di sistema
+    if ! crontab -l 2>/dev/null | grep -q "webtoon-manager.sh"; then
+        # Aggiungi al crontab di sistema
         (crontab -l 2>/dev/null; echo "${cron_line}") | crontab -
         log "Cron job di sistema configurato: controllo --latest ogni 6 ore"
         echo -e "${GREEN}✓ Cron job di sistema configurato!${NC}"
