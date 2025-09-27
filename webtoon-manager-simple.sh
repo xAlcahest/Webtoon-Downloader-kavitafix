@@ -170,7 +170,8 @@ get_kavita_jwt_token() {
     
     local response=$(curl -s -w "%{http_code}" -o /tmp/kavita_auth.json \
         -X POST "${auth_endpoint}?apiKey=${KAVITA_API_KEY}&pluginName=${plugin_name}" \
-        -H "Content-Type: application/json")
+        -H "Content-Type: application/json" \
+        -d '{}')
     
     local http_code="${response}"
     
@@ -321,6 +322,11 @@ download_webtoon() {
         return 1
     fi
     
+    # Fallback se DOWNLOADS_DIR non è definito
+    if [[ -z "${DOWNLOADS_DIR}" ]]; then
+        DOWNLOADS_DIR="${SCRIPT_DIR}/downloads"
+    fi
+    
     # Estrai nome serie dall'URL per creare sottocartella
     local series_name=$(echo "${url}" | sed 's/.*\/\([^/]*\)\/list.*/\1/' | sed 's/-/ /g' | sed 's/\b\w/\U&/g')
     if [[ -z "${series_name}" || "${series_name}" == "${url}" ]]; then
@@ -469,6 +475,14 @@ remove_from_monitoring() {
 
 # Funzione per controllare aggiornamenti (usata dal cron)
 check_updates() {
+    # Carica configurazione per avere DOWNLOADS_DIR
+    load_config
+    
+    # Fallback se DOWNLOADS_DIR non è definito
+    if [[ -z "${DOWNLOADS_DIR}" ]]; then
+        DOWNLOADS_DIR="${SCRIPT_DIR}/downloads"
+    fi
+    
     if [[ ! -f "${CRON_CHECK_FILE}" ]] || [[ ! -s "${CRON_CHECK_FILE}" ]]; then
         log "Nessuna serie in monitoraggio"
         return 0
