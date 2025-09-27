@@ -220,24 +220,8 @@ test_kavita_connection() {
         return 1
     fi
 }
-        echo -e "${GREEN}✓ Autenticazione Kavita riuscita!${NC}"
-        echo -e "${BLUE}  → API Key valida${NC}"
-        echo -e "${BLUE}  → JWT Token ottenuto${NC}"
-        
-        # Ripristina i valori originali
-        KAVITA_URL="${old_url}"
-        KAVITA_API_KEY="${old_key}"
-        return 0
-    else
-        echo -e "${RED}✗ Errore autenticazione Kavita${NC}"
-        echo -e "${YELLOW}  → Controlla URL e API Key${NC}"
-        
-        # Ripristina i valori originali
-        KAVITA_URL="${old_url}"
-        KAVITA_API_KEY="${old_key}"
-        return 1
-    fi
-}
+
+# Funzione per notificare Kavita di fare scan (con autenticazione corretta)
 
 # Funzione per notificare Kavita di fare scan (con autenticazione corretta)
 trigger_kavita_scan() {
