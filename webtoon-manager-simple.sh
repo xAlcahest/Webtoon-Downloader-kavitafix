@@ -159,14 +159,14 @@ configure() {
 # Funzione per ottenere JWT token da API key di Kavita
 get_kavita_jwt_token() {
     if [[ -z "${KAVITA_URL}" ]] || [[ -z "${KAVITA_API_KEY}" ]]; then
-        log "WARN: Kavita non configurato (URL o API_KEY mancanti)"
+        log "WARN: Kavita non configurato (URL o API_KEY mancanti)" >&2
         return 1
     fi
     
     local auth_endpoint="${KAVITA_URL}/api/Plugin/authenticate"
     local plugin_name="webtoon-manager"
     
-    log "Ottenendo JWT token da Kavita..."
+    log "Ottenendo JWT token da Kavita..." >&2
     
     local response=$(curl -s -w "%{http_code}" -o /tmp/kavita_auth.json \
         -X POST "${auth_endpoint}?apiKey=${KAVITA_API_KEY}&pluginName=${plugin_name}" \
@@ -180,18 +180,18 @@ get_kavita_jwt_token() {
         local jwt_token=$(grep -o '"token":"[^"]*"' /tmp/kavita_auth.json | cut -d'"' -f4)
         
         if [[ -n "${jwt_token}" ]]; then
-            log "✓ JWT token ottenuto con successo"
+            log "✓ JWT token ottenuto con successo" >&2
             echo "${jwt_token}"
             rm -f /tmp/kavita_auth.json
             return 0
         else
-            log "✗ Errore: Token non trovato nella risposta"
+            log "✗ Errore: Token non trovato nella risposta" >&2
             rm -f /tmp/kavita_auth.json
             return 1
         fi
     else
-        log "✗ Errore autenticazione Kavita (HTTP ${http_code})"
-        log "Controlla KAVITA_URL e KAVITA_API_KEY nella configurazione"
+        log "✗ Errore autenticazione Kavita (HTTP ${http_code})" >&2
+        log "Controlla KAVITA_URL e KAVITA_API_KEY nella configurazione" >&2
         rm -f /tmp/kavita_auth.json
         return 1
     fi
