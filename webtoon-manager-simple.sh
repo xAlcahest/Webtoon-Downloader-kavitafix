@@ -7,7 +7,6 @@
 # Configurazioni di default
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="${SCRIPT_DIR}/webtoon-config.conf"
-DOWNLOADS_DIR="${SCRIPT_DIR}/downloads"
 LOG_FILE="${SCRIPT_DIR}/webtoon-manager.log"
 CRON_CHECK_FILE="${SCRIPT_DIR}/.cron_urls"
 
