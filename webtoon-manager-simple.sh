@@ -90,7 +90,7 @@ CONCURRENT_CHAPTERS=3
 CONCURRENT_IMAGES=10
 
 # Directories
-DOWNLOADS_DIR="${downloads_dir}"
+DOWNLOADS_DIR="./downloads"
 
 # Notification Settings (opzionale)
 DISCORD_WEBHOOK_URL=""
