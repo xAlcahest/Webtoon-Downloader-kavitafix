@@ -44,7 +44,7 @@ show_help() {
     echo "  --format <cbz|pdf|images>       - Formato output (default: cbz)"
     echo "  --quality <40-100>              - Qualità immagini (default: 100)"
     echo "  --concurrent-chapters <num>     - Capitoli scaricati contemporaneamente (default: 3)"
-    echo "  --concurrent-images <num>       - Immagini/pagine per capitolo contemporaneamente (default: 10)"
+    echo "  --concurrent-pages <num>        - Immagini/pagine per capitolo contemporaneamente (default: 10)"
     echo ""
     echo "Logica:"
     echo "  - Il download manuale scarica TUTTI gli episodi e aggiunge la serie al monitoraggio"
@@ -326,7 +326,7 @@ download_webtoon() {
     for arg in "${extra_args[@]}"; do
         case "$arg" in
             "--concurrent-chapters") has_concurrent_chapters=true ;;
-            "--concurrent-images") has_concurrent_images=true ;;
+            "--concurrent-pages") has_concurrent_images=true ;;
             "--save-as"|"--format") has_format=true ;;
             "--quality") has_quality=true ;;
         esac
@@ -338,7 +338,7 @@ download_webtoon() {
     fi
     
     if [[ "$has_concurrent_images" == "false" ]] && [[ -n "${CONCURRENT_IMAGES}" ]]; then
-        download_args+=("--concurrent-images" "${CONCURRENT_IMAGES}")
+        download_args+=("--concurrent-pages" "${CONCURRENT_IMAGES}")
     fi
     
     if [[ "$has_format" == "false" ]] && [[ -n "${DEFAULT_FORMAT}" ]]; then
@@ -473,7 +473,7 @@ check_updates() {
                 update_args+=("--concurrent-chapters" "${CONCURRENT_CHAPTERS}")
             fi
             if [[ -n "${CONCURRENT_IMAGES}" ]]; then
-                update_args+=("--concurrent-images" "${CONCURRENT_IMAGES}")
+                update_args+=("--concurrent-pages" "${CONCURRENT_IMAGES}")
             fi
             
             if poetry run webtoon-downloader "${url}" "${update_args[@]}" ${args}; then
