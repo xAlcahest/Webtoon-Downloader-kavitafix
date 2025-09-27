@@ -22,7 +22,13 @@ from webtoon_downloader.core.webtoon.exporter import DataExporter
 from webtoon_downloader.core.webtoon.extractor import WebtoonMainPageExtractor
 from webtoon_downloader.core.webtoon.fetchers import WebtoonFetcher
 from webtoon_downloader.core.webtoon.models import ChapterInfo
-from webtoon_downloader.core.webtoon.namer import NonSeparateFileNameGenerator, SeparateFileNameGenerator
+from webtoon_downloader.core.webtoon.namer import (
+    NonSeparateFileNameGenerator, 
+    SeparateFileNameGenerator,
+    KavitaFileNameGenerator,
+    KavitaNonSeparateFileNameGenerator
+)
+from webtoon_downloader.core.webtoon.season_parser import generate_kavita_filename, parse_season_from_title
 from webtoon_downloader.storage import AioFolderWriter, AioPdfWriter, AioWriter, AioZipWriter
 from webtoon_downloader.transformers.image import AioImageFormatTransformer
 
@@ -154,11 +160,26 @@ class WebtoonDownloader:
         Returns:
             An instance of a storage writer (`AioWriter` subclass) appropriate for the storage type.
         """
-        dest = f"{chapter_info.number:0{len(str(chapter_info.total_chapters))}d}"
         if self.storage_type in ["zip", "cbz"]:
-            return AioZipWriter(self._directory / f"{dest}.{self.storage_type}")
+            # Use Kavita-compatible naming for CBZ/ZIP files
+            volume, chapter = parse_season_from_title(chapter_info.title)
+            kavita_name = generate_kavita_filename(
+                chapter_info.series_title, 
+                volume, 
+                chapter, 
+                chapter_info.title
+            )
+            return AioZipWriter(self._directory / f"{kavita_name}.{self.storage_type}")
         elif self.storage_type == "pdf":
-            return AioPdfWriter(self._directory / f"{dest}.pdf")
+            # Use Kavita-compatible naming for PDF files too
+            volume, chapter = parse_season_from_title(chapter_info.title)
+            kavita_name = generate_kavita_filename(
+                chapter_info.series_title, 
+                volume, 
+                chapter, 
+                chapter_info.title
+            )
+            return AioPdfWriter(self._directory / f"{kavita_name}.pdf")
         else:
             return AioFolderWriter(self._directory)
 
@@ -185,9 +206,9 @@ async def download_webtoon(opts: WebtoonDownloadOptions) -> list[DownloadResult]
         A list of download results for each chapter.
     """
     file_name_generator = (
-        SeparateFileNameGenerator(use_chapter_title_directories=True)
+        KavitaFileNameGenerator(use_chapter_title_directories=True)
         if opts.separate
-        else NonSeparateFileNameGenerator()
+        else KavitaNonSeparateFileNameGenerator()
     )
     webtoon_client = WebtoonHttpClient(proxy=opts.proxy, retry_strategy=opts.retry_strategy)
     image_downloader = ImageDownloader(

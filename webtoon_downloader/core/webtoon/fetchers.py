@@ -19,6 +19,7 @@ from webtoon_downloader.core.exceptions import (
 from webtoon_downloader.core.webtoon.api import WebtoonAPI
 from webtoon_downloader.core.webtoon.client import WebtoonHttpClient, WebtoonURL
 from webtoon_downloader.core.webtoon.models import ChapterInfo
+from webtoon_downloader.core.webtoon.season_parser import parse_season_from_title
 
 log = logging.getLogger(__name__)
 
@@ -165,13 +166,19 @@ class WebtoonFetcher:
 
         chapter_details: list[ChapterInfo] = []
         for chapter_number, chapter_detail in enumerate(chapter_items, start=1):
+            episode_title = chapter_detail.episodeTitle.strip()
+            
+            # Parse season information from episode title
+            volume_number, parsed_episode_number = parse_season_from_title(episode_title)
+            
             chapter_info = ChapterInfo(
                 number=chapter_number,
                 viewer_url=f"{WebtoonURL}{chapter_detail.viewerLink}",
-                title=chapter_detail.episodeTitle.strip(),
+                title=episode_title,
                 data_episode_no=chapter_detail.episodeNo,
                 total_chapters=len(chapter_items),
                 series_title=series_title.strip(),
+                volume_number=volume_number,
             )
             chapter_details.append(chapter_info)
 

@@ -7,10 +7,13 @@ class ChapterInfo:
     An immutable object representing a chapter of a webtoon. It supports ordering based on the chapter number.
 
     Attributes:
-        chapter_number  : The released chapter number, used for user-facing purposes.
+        number          : The released chapter number, used for user-facing purposes.
         viewer_url      : The URL where the chapter content can be accessed.
         data_episode_no : An internal identifier for the chapter, as used by the webtoon viewer.
         title           : The title of the chapter.
+        series_title    : The title of the webtoon series.
+        total_chapters  : Total number of chapters in the series.
+        volume_number   : Volume number (corresponds to season, default 1).
     """
 
     number: int
@@ -19,6 +22,7 @@ class ChapterInfo:
     title: str
     series_title: str
     total_chapters: int
+    volume_number: int = 1
 
     sort_index: int = field(init=False, repr=False)
 
