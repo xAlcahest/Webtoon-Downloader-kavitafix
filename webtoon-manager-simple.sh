@@ -2,21 +2,8 @@
 
 # Webtoon Manager - Intermediario per download e monitoraggio automatico
 # Versione: 1.1
-# Author: xAlcahes    read -p "Library ID Kavita (default: 1): " kavita_library_id
-    kavita_library_id=${kavita_library_id:-1}
-    
-    echo ""
-    echo "Directory Downloads:"
-    read -p "Percorso downloads (default: ./downloads): " downloads_dir
-    downloads_dir=${downloads_dir:-"./downloads"}
-    
-    echo ""
-    echo "Impostazioni Download:"
-    read -p "Formato default (cbz/pdf/images, default: cbz): " default_format
-    default_format=${default_format:-"cbz"}
-    
-    read -p "Qualità (40-100, default: 100): " default_quality
-    default_quality=${default_quality:-100}
+# Author: xAlcahest
+
 # Configurazioni di default
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="${SCRIPT_DIR}/webtoon-config.conf"
