@@ -250,14 +250,10 @@ trigger_kavita_scan() {
         return 1
     fi
     
-    log "DEBUG: JWT token ottenuto, lunghezza: ${#jwt_token}"
-    
     # Usa il JWT token per triggare il scan
     local scan_endpoint="${KAVITA_URL}/api/Library"
     
     # Prova prima scan-all
-    log "DEBUG: Tentativo scan-all a ${scan_endpoint}/scan-all"
-    log "DEBUG: JWT token (primi 50 caratteri): ${jwt_token:0:50}..."
     local response=$(curl -s -w "%{http_code}" -o /dev/null \
         -X POST "${scan_endpoint}/scan-all" \
         -H "Authorization: Bearer ${jwt_token}" \
