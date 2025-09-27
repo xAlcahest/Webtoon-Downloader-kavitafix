@@ -359,7 +359,7 @@ download_webtoon() {
     
     # Esegui il download con poetry
     cd "${SCRIPT_DIR}"
-    if poetry run webtoon-downloader "${url}" --output "${DOWNLOADS_DIR}" "${all_args[@]}"; then
+    if poetry run webtoon-downloader "${url}" --out "${DOWNLOADS_DIR}" "${all_args[@]}"; then
         log "✓ Download completato: ${url}"
         
         # Aggiungi automaticamente al monitoraggio per futuri --latest
@@ -466,7 +466,7 @@ check_updates() {
             
             cd "${SCRIPT_DIR}"
             # SEMPRE usa --latest per il monitoraggio automatico
-            local update_args=("--latest" "--output" "${DOWNLOADS_DIR}")
+            local update_args=("--latest" "--out" "${DOWNLOADS_DIR}")
             
             # Aggiungi parametri di concorrenza se configurati
             if [[ -n "${CONCURRENT_CHAPTERS}" ]]; then
