@@ -2,10 +2,21 @@
 
 # Webtoon Manager - Intermediario per download e monitoraggio automatico
 # Versione: 1.1
-# Author: xAlcahest
-
-set -e
-
+# Author: xAlcahes    read -p "Library ID Kavita (default: 1): " kavita_library_id
+    kavita_library_id=${kavita_library_id:-1}
+    
+    echo ""
+    echo "Directory Downloads:"
+    read -p "Percorso downloads (default: ./downloads): " downloads_dir
+    downloads_dir=${downloads_dir:-"./downloads"}
+    
+    echo ""
+    echo "Impostazioni Download:"
+    read -p "Formato default (cbz/pdf/images, default: cbz): " default_format
+    default_format=${default_format:-"cbz"}
+    
+    read -p "Qualità (40-100, default: 100): " default_quality
+    default_quality=${default_quality:-100}
 # Configurazioni di default
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="${SCRIPT_DIR}/webtoon-config.conf"
@@ -79,7 +90,7 @@ CONCURRENT_CHAPTERS=3
 CONCURRENT_IMAGES=10
 
 # Directories
-DOWNLOADS_DIR="./downloads"
+DOWNLOADS_DIR="${downloads_dir}"
 
 # Notification Settings (opzionale)
 DISCORD_WEBHOOK_URL=""
@@ -122,6 +133,11 @@ configure() {
     kavita_library_id=${kavita_library_id:-1}
     
     echo ""
+    echo "Directory Downloads:"
+    read -p "Percorso directory downloads [./downloads]: " downloads_dir
+    downloads_dir=${downloads_dir:-"./downloads"}
+    
+    echo ""
     echo "Impostazioni Download:"
     read -p "Formato di default (cbz/pdf/images) [cbz]: " default_format
     default_format=${default_format:-"cbz"}
@@ -139,6 +155,7 @@ configure() {
     sed -i "s|KAVITA_URL=.*|KAVITA_URL=\"${kavita_url}\"|" "${CONFIG_FILE}"
     sed -i "s|KAVITA_API_KEY=.*|KAVITA_API_KEY=\"${kavita_api_key}\"|" "${CONFIG_FILE}"
     sed -i "s|KAVITA_LIBRARY_ID=.*|KAVITA_LIBRARY_ID=${kavita_library_id}|" "${CONFIG_FILE}"
+    sed -i "s|DOWNLOADS_DIR=.*|DOWNLOADS_DIR=\"${downloads_dir}\"|" "${CONFIG_FILE}"
     sed -i "s|DEFAULT_FORMAT=.*|DEFAULT_FORMAT=\"${default_format}\"|" "${CONFIG_FILE}"
     sed -i "s|DEFAULT_QUALITY=.*|DEFAULT_QUALITY=${default_quality}|" "${CONFIG_FILE}"
     sed -i "s|CONCURRENT_CHAPTERS=.*|CONCURRENT_CHAPTERS=${concurrent_chapters}|" "${CONFIG_FILE}"
@@ -312,8 +329,27 @@ download_webtoon() {
         exit 1
     fi
     
-    # Crea directory downloads se non esiste
-    mkdir -p "${DOWNLOADS_DIR}"
+    load_config
+    if [[ $? -ne 0 ]]; then
+        echo -e "${RED}Configurazione non trovata. Esegui prima: $0 config${NC}"
+        return 1
+    fi
+    
+    # Estrai nome serie dall'URL per creare sottocartella
+    local series_name=$(echo "${url}" | sed 's/.*\/\([^/]*\)\/list.*/\1/' | sed 's/-/ /g' | sed 's/\b\w/\U&/g')
+    if [[ -z "${series_name}" || "${series_name}" == "${url}" ]]; then
+        # Fallback: usa parte dell'URL
+        series_name=$(echo "${url}" | sed 's/.*\/\([^/?]*\).*/\1/' | sed 's/-/_/g')
+        [[ -z "${series_name}" ]] && series_name="Unknown_Series"
+    fi
+    
+    # Directory specifica per la serie
+    local series_dir="${DOWNLOADS_DIR}/${series_name}"
+    
+    # Crea directory downloads e sottocartella serie
+    mkdir -p "${series_dir}"
+    
+    log "Downloading '${series_name}' to: ${series_dir}"
     
     # Prepara argomenti con defaults dalla configurazione
     local download_args=()
@@ -359,7 +395,7 @@ download_webtoon() {
     
     # Esegui il download con poetry
     cd "${SCRIPT_DIR}"
-    if poetry run webtoon-downloader "${url}" --out "${DOWNLOADS_DIR}" "${all_args[@]}"; then
+    if poetry run webtoon-downloader "${url}" --out "${series_dir}" "${all_args[@]}"; then
         log "✓ Download completato: ${url}"
         
         # Aggiungi automaticamente al monitoraggio per futuri --latest
@@ -466,7 +502,15 @@ check_updates() {
             
             cd "${SCRIPT_DIR}"
             # SEMPRE usa --latest per il monitoraggio automatico
-            local update_args=("--latest" "--out" "${DOWNLOADS_DIR}")
+            # Estrai nome serie per directory specifica
+            local series_name=$(echo "${url}" | sed 's/.*\/\([^/]*\)\/list.*/\1/' | sed 's/-/ /g' | sed 's/\b\w/\U&/g')
+            if [[ -z "${series_name}" || "${series_name}" == "${url}" ]]; then
+                series_name="Unknown_Series"
+            fi
+            local series_dir="${DOWNLOADS_DIR}/${series_name}"
+            mkdir -p "${series_dir}"
+            
+            local update_args=("--latest" "--out" "${series_dir}")
             
             # Aggiungi parametri di concorrenza se configurati
             if [[ -n "${CONCURRENT_CHAPTERS}" ]]; then
