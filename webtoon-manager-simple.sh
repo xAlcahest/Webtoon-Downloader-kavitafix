@@ -388,7 +388,7 @@ download_webtoon() {
     
     # Esegui il download con poetry
     cd "${SCRIPT_DIR}"
-    if poetry run webtoon-downloader "${url}" --out "${series_dir}" "${all_args[@]}"; then
+    if /root/.local/bin/poetry run webtoon-downloader "${url}" --out "${series_dir}" "${all_args[@]}"; then
         log "✓ Download completato: ${url}"
         
         # Aggiungi automaticamente al monitoraggio per futuri --latest
@@ -521,7 +521,7 @@ check_updates() {
                 update_args+=("--concurrent-pages" "${CONCURRENT_IMAGES}")
             fi
             
-            if poetry run webtoon-downloader "${url}" "${update_args[@]}" ${args}; then
+            if /root/.local/bin/poetry run webtoon-downloader "${url}" "${update_args[@]}" ${args}; then
                 log "✓ Controllo episodi completato per serie #${series_count}"
                 new_episodes_found=true
             else
