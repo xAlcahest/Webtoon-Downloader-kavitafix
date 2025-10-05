@@ -513,12 +513,24 @@ check_updates() {
             
             local update_args=("--latest" "--out" "${series_dir}")
             
+            # Aggiungi formato CBZ (CRITICO per Kavita!)
+            if [[ -n "${DEFAULT_FORMAT}" ]]; then
+                update_args+=("--save-as" "${DEFAULT_FORMAT}")
+            else
+                update_args+=("--save-as" "cbz")
+            fi
+            
             # Aggiungi parametri di concorrenza se configurati
             if [[ -n "${CONCURRENT_CHAPTERS}" ]]; then
                 update_args+=("--concurrent-chapters" "${CONCURRENT_CHAPTERS}")
             fi
             if [[ -n "${CONCURRENT_IMAGES}" ]]; then
                 update_args+=("--concurrent-pages" "${CONCURRENT_IMAGES}")
+            fi
+            
+            # Aggiungi qualità se configurata
+            if [[ -n "${DEFAULT_QUALITY}" ]]; then
+                update_args+=("--quality" "${DEFAULT_QUALITY}")
             fi
             
             if /root/.local/bin/poetry run webtoon-downloader "${url}" "${update_args[@]}" ${args}; then
