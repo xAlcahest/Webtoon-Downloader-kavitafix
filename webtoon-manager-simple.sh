@@ -496,7 +496,11 @@ check_updates() {
     while IFS= read -r line; do
         if [[ -n "${line}" ]]; then
             local url=$(echo "${line}" | awk '{print $1}')
-            local args=$(echo "${line}" | cut -d' ' -f2-)
+            local args=""
+            # Prendi solo gli argomenti DOPO l'URL (se esistono)
+            if echo "${line}" | grep -q ' '; then
+                args=$(echo "${line}" | cut -d' ' -f2-)
+            fi
             ((series_count++))
             
             log "Controllo nuovi episodi per serie #${series_count}: ${url}"
