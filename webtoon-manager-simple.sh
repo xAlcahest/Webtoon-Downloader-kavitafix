@@ -533,15 +533,13 @@ check_updates() {
                 update_args+=("--quality" "${DEFAULT_QUALITY}")
             fi
             
-            # IMPORTANTE: URL deve essere l'ultimo argomento (dopo tutti i flag)
-            # Rimuovi query params dall'URL (es: ?title_no=XXX) che causano errori
-            local clean_url=$(echo "${url}" | sed 's/\?.*$//')
-            
-            if /root/.local/bin/poetry run webtoon-downloader "${update_args[@]}" ${args} "${clean_url}"; then
+            # IMPORTANTE: L'URL deve essere quotato per gestire i query params (es: ?title_no=XXX)
+            # Deve essere l'ULTIMO argomento, dopo tutti i flag
+            if /root/.local/bin/poetry run webtoon-downloader "${update_args[@]}" ${args} "${url}"; then
                 log "✓ Controllo episodi completato per serie #${series_count}"
                 new_episodes_found=true
             else
-                log "✗ Errore durante controllo serie #${series_count}: ${clean_url}"
+                log "✗ Errore durante controllo serie #${series_count}: ${url}"
             fi
         fi
     done < "${CRON_CHECK_FILE}"
