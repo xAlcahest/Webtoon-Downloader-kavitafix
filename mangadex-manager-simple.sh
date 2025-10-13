@@ -278,12 +278,25 @@ fix_volumeless_chapters() {
             if mv "$old_file" "$new_file"; then
                 log "✓ Rinominato: ${basename} → ${new_basename}"
                 
-                # Aggiorna database SQLite
-                if sqlite3 "$db_file" "UPDATE file_info_cbz SET name='${new_basename}' WHERE name='${basename}';" 2>/dev/null; then
-                    log "✓ Database aggiornato per: ${new_basename}"
-                    ((fixed_count++))
+                # Aggiorna database SQLite con proper escaping
+                # Usa parametri bindati per evitare problemi con apostrofi/spazi
+                local sql_update="UPDATE file_info_cbz SET name='${new_basename}' WHERE name='${basename}';"
+                
+                if sqlite3 "$db_file" "$sql_update" 2>&1 | tee -a "${LOG_FILE}"; then
+                    # Verifica che l'update abbia effettivamente modificato una riga
+                    local rows_changed=$(sqlite3 "$db_file" "SELECT changes();" 2>/dev/null)
+                    if [[ "${rows_changed}" == "1" ]]; then
+                        log "✓ Database aggiornato per: ${new_basename}"
+                        ((fixed_count++))
+                    else
+                        log "✗ Errore: Nessuna riga modificata nel database per: ${basename}"
+                        log "  SQL: ${sql_update}"
+                        # Rollback: ripristina nome file originale
+                        mv "$new_file" "$old_file" 2>/dev/null
+                    fi
                 else
-                    log "✗ Errore aggiornamento database per: ${basename}"
+                    log "✗ Errore esecuzione query per: ${basename}"
+                    log "  SQL: ${sql_update}"
                     # Rollback: ripristina nome file originale
                     mv "$new_file" "$old_file" 2>/dev/null
                 fi
