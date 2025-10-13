@@ -139,6 +139,233 @@ PYTHON_SCRIPT
     fi
 }
 
+# Funzione per scan globale di tutte le cartelle manga
+scan_all_manga() {
+    local base_dir="$1"
+    
+    if [[ -z "${base_dir}" ]]; then
+        load_config
+        if [[ -z "${DOWNLOADS_DIR}" ]]; then
+            echo -e "${RED}Errore: Cartella base non specificata e DOWNLOADS_DIR non configurato${NC}"
+            echo "Uso: $0 scan-all <cartella_base>"
+            return 1
+        fi
+        base_dir="${DOWNLOADS_DIR}"
+    fi
+    
+    if [[ ! -d "${base_dir}" ]]; then
+        echo -e "${RED}Errore: Directory non trovata: ${base_dir}${NC}"
+        return 1
+    fi
+    
+    log "📚 Inizio scan globale di: ${base_dir}"
+    echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+    echo -e "${BLUE}          SCAN GLOBALE INTEGRITÀ MANGA/WEBTOON${NC}"
+    echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+    echo ""
+    
+    # Crea file temporaneo per i risultati
+    local temp_result=$(mktemp)
+    
+    # Usa Python per scan completo con progress bar
+    CBZ_BASE_DIR="${base_dir}" python3 << 'PYTHON_SCRIPT' > "${temp_result}"
+import zipfile
+import sys
+import os
+from pathlib import Path
+import imghdr
+
+base_dir = Path(os.environ['CBZ_BASE_DIR'])
+
+# Trova tutte le sottocartelle (ogni manga/webtoon)
+manga_folders = sorted([d for d in base_dir.iterdir() if d.is_dir()])
+total_folders = len(manga_folders)
+
+print(f"TOTAL_FOLDERS={total_folders}", file=sys.stderr, flush=True)
+
+global_stats = {
+    'total_cbz': 0,
+    'ok_cbz': 0,
+    'corrupted_cbz': 0,
+    'total_images': 0,
+    'ok_images': 0,
+    'corrupted_images': 0,
+    'folders_with_issues': []
+}
+
+for folder_idx, manga_folder in enumerate(manga_folders, 1):
+    manga_name = manga_folder.name
+    
+    # Progress per cartella corrente
+    percent = int((folder_idx / total_folders) * 100)
+    bar_length = 50
+    filled = int((percent / 100) * bar_length)
+    bar = '█' * filled + '░' * (bar_length - filled)
+    
+    print(f'\r[{bar}] {percent}% - Scansionando: {manga_name[:40]:<40}', end='', flush=True, file=sys.stderr)
+    
+    # Trova CBZ e immagini
+    cbz_files = list(manga_folder.glob("*.cbz"))
+    image_files = []
+    for ext in ['*.jpg', '*.jpeg', '*.png', '*.gif', '*.webp']:
+        image_files.extend(manga_folder.glob(ext))
+    
+    folder_corrupted = []
+    folder_ok_cbz = 0
+    folder_ok_images = 0
+    
+    # Verifica CBZ
+    for cbz_file in cbz_files:
+        global_stats['total_cbz'] += 1
+        try:
+            with zipfile.ZipFile(str(cbz_file), 'r') as zf:
+                result = zf.testzip()
+                if result is not None:
+                    global_stats['corrupted_cbz'] += 1
+                    folder_corrupted.append(('CBZ', str(cbz_file)))
+                else:
+                    global_stats['ok_cbz'] += 1
+                    folder_ok_cbz += 1
+        except Exception:
+            global_stats['corrupted_cbz'] += 1
+            folder_corrupted.append(('CBZ', str(cbz_file)))
+    
+    # Verifica immagini (solo che siano file validi non vuoti)
+    for img_file in image_files:
+        global_stats['total_images'] += 1
+        try:
+            # Controlla che il file esista, non sia vuoto e abbia un formato immagine valido
+            if img_file.stat().st_size > 0:
+                # Prova a determinare il tipo di immagine
+                img_type = imghdr.what(str(img_file))
+                if img_type is not None:
+                    global_stats['ok_images'] += 1
+                    folder_ok_images += 1
+                else:
+                    # File non riconosciuto come immagine valida
+                    global_stats['corrupted_images'] += 1
+                    folder_corrupted.append(('IMAGE', str(img_file)))
+            else:
+                # File vuoto
+                global_stats['corrupted_images'] += 1
+                folder_corrupted.append(('IMAGE', str(img_file)))
+        except Exception:
+            global_stats['corrupted_images'] += 1
+            folder_corrupted.append(('IMAGE', str(img_file)))
+    
+    # Se ci sono problemi, segna la cartella
+    if folder_corrupted:
+        global_stats['folders_with_issues'].append(manga_name)
+        # Output per bash
+        print(f"FOLDER_ISSUE:{manga_name}")
+        for ftype, fpath in folder_corrupted:
+            print(f"CORRUPTED:{ftype}:{fpath}")
+
+# Nuova riga dopo progress
+print(file=sys.stderr)
+
+# Output statistiche globali
+print(f"TOTAL_CBZ={global_stats['total_cbz']}")
+print(f"OK_CBZ={global_stats['ok_cbz']}")
+print(f"CORRUPTED_CBZ={global_stats['corrupted_cbz']}")
+print(f"TOTAL_IMAGES={global_stats['total_images']}")
+print(f"OK_IMAGES={global_stats['ok_images']}")
+print(f"CORRUPTED_IMAGES={global_stats['corrupted_images']}")
+
+sys.exit(0)
+PYTHON_SCRIPT
+    
+    # Leggi risultati dal file temporaneo
+    local result=$(cat "${temp_result}")
+    rm -f "${temp_result}"
+    
+    # Parse risultati
+    local total_cbz=0
+    local ok_cbz=0
+    local corrupted_cbz=0
+    local total_images=0
+    local ok_images=0
+    local corrupted_images=0
+    local current_folder=""
+    declare -A folder_issues
+    
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^TOTAL_CBZ=([0-9]+)$ ]]; then
+            total_cbz="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^OK_CBZ=([0-9]+)$ ]]; then
+            ok_cbz="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^CORRUPTED_CBZ=([0-9]+)$ ]]; then
+            corrupted_cbz="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^TOTAL_IMAGES=([0-9]+)$ ]]; then
+            total_images="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^OK_IMAGES=([0-9]+)$ ]]; then
+            ok_images="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^CORRUPTED_IMAGES=([0-9]+)$ ]]; then
+            corrupted_images="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^FOLDER_ISSUE:(.+)$ ]]; then
+            current_folder="${BASH_REMATCH[1]}"
+            folder_issues["${current_folder}"]=""
+        elif [[ "$line" =~ ^CORRUPTED:(CBZ|IMAGE):(.+)$ ]]; then
+            local ftype="${BASH_REMATCH[1]}"
+            local fpath="${BASH_REMATCH[2]}"
+            if [[ -n "${current_folder}" ]]; then
+                folder_issues["${current_folder}"]+="  ${ftype}: $(basename "${fpath}")"$'\n'
+            fi
+        fi
+    done <<< "$result"
+    
+    # Mostra risultati
+    echo ""
+    echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+    echo -e "${BLUE}                    RISULTATI SCAN GLOBALE${NC}"
+    echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+    echo ""
+    
+    # Statistiche CBZ
+    if [[ ${total_cbz} -gt 0 ]]; then
+        echo -e "${BLUE}📦 File CBZ:${NC}"
+        echo -e "   Totali:    ${total_cbz}"
+        echo -e "   ${GREEN}✓ Validi:   ${ok_cbz}${NC}"
+        if [[ ${corrupted_cbz} -gt 0 ]]; then
+            echo -e "   ${RED}✗ Corrotti: ${corrupted_cbz}${NC}"
+        else
+            echo -e "   ${GREEN}✓ Corrotti: 0${NC}"
+        fi
+        echo ""
+    fi
+    
+    # Statistiche immagini
+    if [[ ${total_images} -gt 0 ]]; then
+        echo -e "${BLUE}🖼️  File Immagine:${NC}"
+        echo -e "   Totali:    ${total_images}"
+        echo -e "   ${GREEN}✓ Validi:   ${ok_images}${NC}"
+        if [[ ${corrupted_images} -gt 0 ]]; then
+            echo -e "   ${RED}✗ Corrotti: ${corrupted_images}${NC}"
+        else
+            echo -e "   ${GREEN}✓ Corrotti: 0${NC}"
+        fi
+        echo ""
+    fi
+    
+    # Cartelle con problemi
+    local issues_count=${#folder_issues[@]}
+    if [[ ${issues_count} -gt 0 ]]; then
+        echo -e "${RED}⚠️  CARTELLE CON PROBLEMI: ${issues_count}${NC}"
+        echo ""
+        for folder in "${!folder_issues[@]}"; do
+            echo -e "${YELLOW}📁 ${folder}${NC}"
+            echo -e "${folder_issues[${folder}]}"
+        done
+        log "Scan globale completato: ${issues_count} cartelle con problemi"
+        return 1
+    else
+        echo -e "${GREEN}✓ NESSUN PROBLEMA TROVATO!${NC}"
+        echo -e "${GREEN}  Tutti i file sono integri e leggibili${NC}"
+        log "Scan globale completato: nessun problema trovato"
+        return 0
+    fi
+}
+
 # Funzione per stampare help
 show_help() {
     echo -e "${BLUE}Webtoon Manager - Download e monitoraggio automatico${NC}"
@@ -148,6 +375,7 @@ show_help() {
     echo "  $0 list-monitored               - Lista URLs monitorati automaticamente"
     echo "  $0 remove-monitor <URL>         - Rimuove URL dal monitoraggio automatico"
     echo "  $0 verify-cbz <cartella>        - Verifica integrità file CBZ in una cartella"
+    echo "  $0 scan-all [cartella]          - Scan globale di tutte le cartelle manga/webtoon (CBZ + immagini)"
     echo "  $0 setup-cron                   - Configura il cron job di sistema (ogni 6 ore)"
     echo "  $0 remove-cron                  - Rimuove il cron job di sistema"
     echo "  $0 check-updates                - Controlla aggiornamenti manualmente (solo --latest)"
@@ -169,9 +397,18 @@ show_help() {
     echo "Esempi:"
     echo "  $0 download 'https://www.webtoons.com/en/fantasy/tower-of-god/list?title_no=95' --format cbz"
     echo "  $0 download 'URL' --concurrent-chapters 5 --concurrent-images 20 --quality 90"
-    echo "  $0 verify-cbz './downloads/Down To Earth'  # Verifica CBZ esistenti"
+    echo "  $0 verify-cbz './downloads/Down To Earth'  # Verifica CBZ in una cartella"
+    echo "  $0 scan-all '/root/docker-conf/kavita/manga'  # Scan globale di tutte le cartelle"
+    echo "  $0 scan-all  # Usa DOWNLOADS_DIR configurato"
     echo "  $0 setup-cron  # Configura controllo automatico ogni 6 ore"
     echo "  $0 list-monitored  # Vedi quali serie sono monitorate"
+    echo ""
+    echo "Scan Globale:"
+    echo "  • Verifica tutte le sottocartelle manga/webtoon"
+    echo "  • Controlla integrità file CBZ (archivi ZIP)"
+    echo "  • Controlla validità file immagine (jpg, png, gif, webp)"
+    echo "  • Progress bar in tempo reale"
+    echo "  • Report dettagliato con statistiche"
     echo ""
     echo "Performance Tips:"
     echo "  • --concurrent-chapters 1-3: Sicuro per la maggior parte dei server"
@@ -752,6 +989,11 @@ main() {
                 exit 1
             fi
             verify_cbz_integrity "${folder_path}"
+            ;;
+        "scan-all")
+            shift
+            local base_path="$1"
+            scan_all_manga "${base_path}"
             ;;
         "check-updates")
             check_updates
