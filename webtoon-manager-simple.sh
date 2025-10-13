@@ -42,8 +42,18 @@ verify_cbz_integrity() {
         ((cbz_count++))
         local basename=$(basename "$cbz_file")
         
-        # Test UNICO: Verifica che il file sia un archivio ZIP leggibile
-        if unzip -tq "$cbz_file" >/dev/null 2>&1; then
+        # Test con Python zipfile - più tollerante di unzip
+        if python3 -c "
+import zipfile
+import sys
+try:
+    with zipfile.ZipFile('$cbz_file', 'r') as zf:
+        result = zf.testzip()
+        if result is not None:
+            sys.exit(1)
+except Exception:
+    sys.exit(1)
+" 2>/dev/null; then
             ((ok_count++))
         else
             log "✗ CBZ corrotto (non leggibile come ZIP): ${basename}"
