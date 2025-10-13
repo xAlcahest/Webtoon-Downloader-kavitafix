@@ -233,6 +233,17 @@ for folder_idx, manga_folder in enumerate(manga_folders, 1):
     
     total_files_in_folder = len(cbz_files) + len(image_files)
     
+    # Progress LIVELLO 1: Cartelle totali (mostra subito quando inizia nuova cartella)
+    folder_percent = int((folder_idx / total_folders) * 100)
+    folder_bar_length = 50
+    folder_filled = int((folder_percent / 100) * folder_bar_length)
+    folder_bar = '█' * folder_filled + '░' * (folder_bar_length - folder_filled)
+    
+    # Aggiorna la prima riga quando inizia una nuova cartella
+    sys.stderr.write(f'\033[F\033[F\033[2K[{folder_bar}] {folder_percent}% - Scansionando: {manga_name[:35]:<35}\n')
+    sys.stderr.write(f'\033[2K  [{"░"*50}] 0% (0/{total_files_in_folder}) - Inizializzazione...\n')
+    sys.stderr.flush()
+    
     folder_corrupted = []
     folder_ok_cbz = 0
     folder_ok_images = 0
@@ -244,11 +255,7 @@ for folder_idx, manga_folder in enumerate(manga_folders, 1):
         current_file_idx += 1
         global_stats['total_cbz'] += 1
         
-        # Progress LIVELLO 1: Cartelle totali
-        folder_percent = int((folder_idx / total_folders) * 100)
-        folder_bar_length = 50
-        folder_filled = int((folder_percent / 100) * folder_bar_length)
-        folder_bar = '█' * folder_filled + '░' * (folder_bar_length - folder_filled)
+        # Ricalcola progress (folder_percent rimane uguale per questa cartella)
         
         # Progress LIVELLO 2: File nella cartella corrente
         file_percent = int((current_file_idx / total_files_in_folder) * 100) if total_files_in_folder > 0 else 0
@@ -283,12 +290,6 @@ for folder_idx, manga_folder in enumerate(manga_folders, 1):
         current_file_idx += 1
         global_stats['total_images'] += 1
         
-        # Progress LIVELLO 1: Cartelle totali
-        folder_percent = int((folder_idx / total_folders) * 100)
-        folder_bar_length = 50
-        folder_filled = int((folder_percent / 100) * folder_bar_length)
-        folder_bar = '█' * folder_filled + '░' * (folder_bar_length - folder_filled)
-        
         # Progress LIVELLO 2: File nella cartella corrente
         file_percent = int((current_file_idx / total_files_in_folder) * 100) if total_files_in_folder > 0 else 0
         file_bar_length = 50
@@ -298,7 +299,7 @@ for folder_idx, manga_folder in enumerate(manga_folders, 1):
         # Nome file troncato
         file_display = img_file.name[:45]
         
-        # Aggiorna entrambe le righe
+        # Aggiorna entrambe le righe (folder_bar e folder_percent calcolati all'inizio del loop)
         sys.stderr.write(f'\033[F\033[2K[{folder_bar}] {folder_percent}% - Scansionando: {manga_name[:35]:<35}\n')
         sys.stderr.write(f'\033[2K  [{file_bar}] {file_percent}% ({current_file_idx}/{total_files_in_folder}) - {file_display:<45}\n')
         sys.stderr.flush()
