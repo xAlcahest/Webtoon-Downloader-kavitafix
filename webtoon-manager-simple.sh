@@ -43,8 +43,11 @@ verify_cbz_integrity() {
     
     echo -e "${BLUE}Trovati ${total_files} file CBZ da verificare...${NC}"
     
-    # Usa Python per verifica con progress bar
-    local result=$(CBZ_DIR="${cbz_dir}" python3 << 'PYTHON_SCRIPT'
+    # Crea file temporaneo per i risultati
+    local temp_result=$(mktemp)
+    
+    # Usa Python per verifica con progress bar (output diretto a terminale)
+    CBZ_DIR="${cbz_dir}" python3 << 'PYTHON_SCRIPT' > "${temp_result}"
 import zipfile
 import sys
 import os
@@ -58,14 +61,14 @@ corrupted = []
 ok_count = 0
 
 for idx, cbz_file in enumerate(cbz_files, 1):
-    # Progress bar
+    # Progress bar su stderr (così va al terminale, non in result)
     percent = int((idx / total) * 100)
     bar_length = 40
     filled = int((percent / 100) * bar_length)
     bar = '█' * filled + '░' * (bar_length - filled)
     
-    # Stampa progress (usa \r per sovrascrivere la stessa riga)
-    print(f'\r[{bar}] {percent}% ({idx}/{total}) - Verificando: {cbz_file.name[:50]:<50}', end='', flush=True)
+    # Stampa progress su stderr (usa \r per sovrascrivere la stessa riga)
+    print(f'\r[{bar}] {percent}% ({idx}/{total}) - Verificando: {cbz_file.name[:50]:<50}', end='', flush=True, file=sys.stderr)
     
     # Verifica integrità
     try:
@@ -78,10 +81,10 @@ for idx, cbz_file in enumerate(cbz_files, 1):
     except Exception:
         corrupted.append(str(cbz_file))
 
-# Nuova riga dopo progress bar
-print()
+# Nuova riga dopo progress bar su stderr
+print(file=sys.stderr)
 
-# Output risultati per bash
+# Output risultati su stdout (per bash)
 print(f"OK_COUNT={ok_count}")
 print(f"TOTAL_COUNT={total}")
 for c in corrupted:
@@ -89,7 +92,10 @@ for c in corrupted:
 
 sys.exit(0)
 PYTHON_SCRIPT
-)
+    
+    # Leggi risultati dal file temporaneo
+    local result=$(cat "${temp_result}")
+    rm -f "${temp_result}"
     
     # Parse risultati Python
     local corrupted_files=()
