@@ -173,7 +173,31 @@ import zipfile
 import sys
 import os
 from pathlib import Path
-import imghdr
+
+# Funzione per riconoscere tipo immagine da magic bytes (sostituisce imghdr deprecato)
+def detect_image_type(file_path):
+    """Rileva il tipo di immagine dai magic bytes (primi byte del file)"""
+    try:
+        with open(file_path, 'rb') as f:
+            header = f.read(32)  # Leggi primi 32 bytes
+        
+        # Magic bytes per formati comuni
+        if header.startswith(b'\xff\xd8\xff'):
+            return 'jpeg'
+        elif header.startswith(b'\x89PNG\r\n\x1a\n'):
+            return 'png'
+        elif header.startswith(b'GIF87a') or header.startswith(b'GIF89a'):
+            return 'gif'
+        elif header.startswith(b'RIFF') and header[8:12] == b'WEBP':
+            return 'webp'
+        elif header.startswith(b'BM'):
+            return 'bmp'
+        elif header.startswith(b'\x00\x00\x01\x00') or header.startswith(b'\x00\x00\x02\x00'):
+            return 'ico'
+        else:
+            return None
+    except Exception:
+        return None
 
 base_dir = Path(os.environ['CBZ_BASE_DIR'])
 
@@ -236,8 +260,8 @@ for folder_idx, manga_folder in enumerate(manga_folders, 1):
         try:
             # Controlla che il file esista, non sia vuoto e abbia un formato immagine valido
             if img_file.stat().st_size > 0:
-                # Prova a determinare il tipo di immagine
-                img_type = imghdr.what(str(img_file))
+                # Usa detect_image_type invece di imghdr.what
+                img_type = detect_image_type(str(img_file))
                 if img_type is not None:
                     global_stats['ok_images'] += 1
                     folder_ok_images += 1

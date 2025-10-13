@@ -3,7 +3,9 @@
 # Python >=3.10,<4.0
 
 # NOTE: webtoon-manager-simple.sh scripts use Python standard library only:
-# - zipfile, imghdr, sys, os, pathlib (all built-in, no extra deps needed)
+# - zipfile, sys, os, pathlib (all built-in, no extra deps needed)
+# - Custom magic bytes detection for images (imghdr was deprecated in Python 3.11+)
+# - Supports: JPEG, PNG, GIF, WEBP, BMP, ICO via magic bytes
 
 # Core dependencies
 beautifulsoup4>=4.12.2,<5.0.0
