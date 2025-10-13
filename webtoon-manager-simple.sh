@@ -42,29 +42,13 @@ verify_cbz_integrity() {
         ((cbz_count++))
         local basename=$(basename "$cbz_file")
         
-        # Test 1: Verifica che il file sia un archivio ZIP valido
-        if ! unzip -t "$cbz_file" &>/dev/null; then
-            log "✗ CBZ corrotto (zip test failed): ${basename}"
+        # Test UNICO: Verifica che il file sia un archivio ZIP leggibile
+        if unzip -tq "$cbz_file" >/dev/null 2>&1; then
+            ((ok_count++))
+        else
+            log "✗ CBZ corrotto (non leggibile come ZIP): ${basename}"
             corrupted_files+=("$cbz_file")
-            continue
         fi
-        
-        # Test 2: Verifica che contenga almeno 1 immagine
-        local image_count=$(unzip -l "$cbz_file" 2>/dev/null | grep -iE '\.(jpg|jpeg|png|webp|gif)$' | wc -l)
-        if [[ ${image_count} -lt 1 ]]; then
-            log "✗ CBZ corrotto (0 immagini): ${basename}"
-            corrupted_files+=("$cbz_file")
-            continue
-        fi
-        
-        # Test 3: Verifica dimensione minima (es: 1 MB)
-        local file_size=$(stat -c%s "$cbz_file" 2>/dev/null || stat -f%z "$cbz_file" 2>/dev/null)
-        if [[ ${file_size} -lt 1048576 ]]; then
-            log "⚠️  CBZ sospetto (< 1 MB): ${basename} (${file_size} bytes, ${image_count} immagini)"
-            # Non lo contiamo come corrotto, ma lo segnaliamo
-        fi
-        
-        ((ok_count++))
     done < <(find "${cbz_dir}" -maxdepth 1 -type f -name "*.cbz" 2>/dev/null)
     
     if [[ ${cbz_count} -eq 0 ]]; then
@@ -79,20 +63,17 @@ verify_cbz_integrity() {
         log "File CBZ corrotti trovati: ${#corrupted_files[@]}"
         
         for corrupted in "${corrupted_files[@]}"; do
-            log "  - $(basename "$corrupted")"
-            # Sposta i file corrotti in una cartella di backup
-            local backup_dir="${cbz_dir}/.corrupted"
-            mkdir -p "${backup_dir}"
-            mv "$corrupted" "${backup_dir}/" 2>/dev/null && \
-                log "  → Spostato in: ${backup_dir}/"
+            local basename=$(basename "$corrupted")
+            log "  - ${basename}"
+            echo -e "${RED}  ✗ ${basename}${NC}"
         done
         
-        echo -e "${YELLOW}💡 File corrotti spostati in: ${cbz_dir}/.corrupted${NC}"
-        echo -e "${YELLOW}   Puoi riscaricarli manualmente con --start e --end${NC}"
+        echo -e "${YELLOW}💡 File corrotti NON spostati automaticamente${NC}"
+        echo -e "${YELLOW}   Per ripararli, riscaricarli manualmente con --start e --end${NC}"
         
         return 1
     else
-        echo -e "${GREEN}✓ Tutti i ${cbz_count} file CBZ sono integri${NC}"
+        echo -e "${GREEN}✓ Tutti i ${cbz_count} file CBZ sono integri e leggibili${NC}"
         return 0
     fi
 }
