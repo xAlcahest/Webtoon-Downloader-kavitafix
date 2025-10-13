@@ -259,11 +259,11 @@ for folder_idx, manga_folder in enumerate(manga_folders, 1):
         # Nome file troncato
         file_display = cbz_file.name[:45]
         
-        # Aggiorna ENTRAMBE le righe con escape codes ANSI
-        # \033[A = muovi cursore su di 1 riga
-        # \033[K = cancella dalla posizione cursore a fine riga
-        print(f'\033[A\033[K[{folder_bar}] {folder_percent}% - Scansionando: {manga_name[:35]:<35}', file=sys.stderr)
-        print(f'\033[K  [{file_bar}] {file_percent}% ({current_file_idx}/{total_files_in_folder}) - {file_display:<45}', file=sys.stderr)
+        # Aggiorna entrambe le righe: usa \033[2K per cancellare riga completa
+        # \033[F muove cursore a inizio riga precedente
+        sys.stderr.write(f'\033[F\033[2K[{folder_bar}] {folder_percent}% - Scansionando: {manga_name[:35]:<35}\n')
+        sys.stderr.write(f'\033[2K  [{file_bar}] {file_percent}% ({current_file_idx}/{total_files_in_folder}) - {file_display:<45}\n')
+        sys.stderr.flush()
         
         try:
             with zipfile.ZipFile(str(cbz_file), 'r') as zf:
@@ -298,9 +298,10 @@ for folder_idx, manga_folder in enumerate(manga_folders, 1):
         # Nome file troncato
         file_display = img_file.name[:45]
         
-        # Aggiorna ENTRAMBE le righe con escape codes ANSI
-        print(f'\033[A\033[K[{folder_bar}] {folder_percent}% - Scansionando: {manga_name[:35]:<35}', file=sys.stderr)
-        print(f'\033[K  [{file_bar}] {file_percent}% ({current_file_idx}/{total_files_in_folder}) - {file_display:<45}', file=sys.stderr)
+        # Aggiorna entrambe le righe
+        sys.stderr.write(f'\033[F\033[2K[{folder_bar}] {folder_percent}% - Scansionando: {manga_name[:35]:<35}\n')
+        sys.stderr.write(f'\033[2K  [{file_bar}] {file_percent}% ({current_file_idx}/{total_files_in_folder}) - {file_display:<45}\n')
+        sys.stderr.flush()
         
         try:
             # Controlla che il file esista, non sia vuoto e abbia un formato immagine valido
