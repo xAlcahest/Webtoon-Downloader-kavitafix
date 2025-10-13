@@ -219,8 +219,8 @@ global_stats = {
 }
 
 # Stampa due righe vuote per le progress bar (le occuperemo dopo)
-print(file=sys.stderr)
-print(file=sys.stderr)
+print("Riga 1 (cartelle totali)", file=sys.stderr)
+print("Riga 2 (file correnti)", file=sys.stderr)
 
 for folder_idx, manga_folder in enumerate(manga_folders, 1):
     manga_name = manga_folder.name
@@ -233,16 +233,12 @@ for folder_idx, manga_folder in enumerate(manga_folders, 1):
     
     total_files_in_folder = len(cbz_files) + len(image_files)
     
-    # Progress LIVELLO 1: Cartelle totali (mostra subito quando inizia nuova cartella)
+    # Progress LIVELLO 1: Cartelle totali (calcolato UNA volta per cartella)
     folder_percent = int((folder_idx / total_folders) * 100)
     folder_bar_length = 50
     folder_filled = int((folder_percent / 100) * folder_bar_length)
     folder_bar = '█' * folder_filled + '░' * (folder_bar_length - folder_filled)
-    
-    # Aggiorna la prima riga quando inizia una nuova cartella
-    sys.stderr.write(f'\033[F\033[F\033[2K[{folder_bar}] {folder_percent}% - Scansionando: {manga_name[:35]:<35}\n')
-    sys.stderr.write(f'\033[2K  [{"░"*50}] 0% (0/{total_files_in_folder}) - Inizializzazione...\n')
-    sys.stderr.flush()
+    folder_line = f'[{folder_bar}] {folder_percent}% - Scansionando: {manga_name[:35]:<35}'
     
     folder_corrupted = []
     folder_ok_cbz = 0
@@ -250,27 +246,26 @@ for folder_idx, manga_folder in enumerate(manga_folders, 1):
     
     current_file_idx = 0
     
+    # Funzione helper per aggiornare le due righe
+    def update_progress(file_name, file_idx, total_files):
+        file_percent = int((file_idx / total_files) * 100) if total_files > 0 else 0
+        file_bar_length = 50
+        file_filled = int((file_percent / 100) * file_bar_length)
+        file_bar = '█' * file_filled + '░' * (file_bar_length - file_filled)
+        file_display = file_name[:45]
+        
+        # Torna su di 2 righe, cancella e riscrivi tutto
+        sys.stderr.write('\033[2A')  # Muovi su 2 righe
+        sys.stderr.write('\033[K' + folder_line + '\n')  # Cancella e scrivi riga 1
+        sys.stderr.write('\033[K  [' + file_bar + '] ' + str(file_percent) + '% (' + str(file_idx) + '/' + str(total_files) + ') - ' + file_display + '\n')  # Cancella e scrivi riga 2
+        sys.stderr.flush()
+    
     # Verifica CBZ
     for cbz_file in cbz_files:
         current_file_idx += 1
         global_stats['total_cbz'] += 1
         
-        # Ricalcola progress (folder_percent rimane uguale per questa cartella)
-        
-        # Progress LIVELLO 2: File nella cartella corrente
-        file_percent = int((current_file_idx / total_files_in_folder) * 100) if total_files_in_folder > 0 else 0
-        file_bar_length = 50
-        file_filled = int((file_percent / 100) * file_bar_length)
-        file_bar = '█' * file_filled + '░' * (file_bar_length - file_filled)
-        
-        # Nome file troncato
-        file_display = cbz_file.name[:45]
-        
-        # Aggiorna entrambe le righe: usa \033[2K per cancellare riga completa
-        # \033[F muove cursore a inizio riga precedente
-        sys.stderr.write(f'\033[F\033[2K[{folder_bar}] {folder_percent}% - Scansionando: {manga_name[:35]:<35}\n')
-        sys.stderr.write(f'\033[2K  [{file_bar}] {file_percent}% ({current_file_idx}/{total_files_in_folder}) - {file_display:<45}\n')
-        sys.stderr.flush()
+        update_progress(cbz_file.name, current_file_idx, total_files_in_folder)
         
         try:
             with zipfile.ZipFile(str(cbz_file), 'r') as zf:
@@ -290,19 +285,7 @@ for folder_idx, manga_folder in enumerate(manga_folders, 1):
         current_file_idx += 1
         global_stats['total_images'] += 1
         
-        # Progress LIVELLO 2: File nella cartella corrente
-        file_percent = int((current_file_idx / total_files_in_folder) * 100) if total_files_in_folder > 0 else 0
-        file_bar_length = 50
-        file_filled = int((file_percent / 100) * file_bar_length)
-        file_bar = '█' * file_filled + '░' * (file_bar_length - file_filled)
-        
-        # Nome file troncato
-        file_display = img_file.name[:45]
-        
-        # Aggiorna entrambe le righe (folder_bar e folder_percent calcolati all'inizio del loop)
-        sys.stderr.write(f'\033[F\033[2K[{folder_bar}] {folder_percent}% - Scansionando: {manga_name[:35]:<35}\n')
-        sys.stderr.write(f'\033[2K  [{file_bar}] {file_percent}% ({current_file_idx}/{total_files_in_folder}) - {file_display:<45}\n')
-        sys.stderr.flush()
+        update_progress(img_file.name, current_file_idx, total_files_in_folder)
         
         try:
             # Controlla che il file esista, non sia vuoto e abbia un formato immagine valido
