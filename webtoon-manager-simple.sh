@@ -218,6 +218,10 @@ global_stats = {
     'folders_with_issues': []
 }
 
+# Stampa due righe vuote per le progress bar (le occuperemo dopo)
+print(file=sys.stderr)
+print(file=sys.stderr)
+
 for folder_idx, manga_folder in enumerate(manga_folders, 1):
     manga_name = manga_folder.name
     
@@ -228,18 +232,6 @@ for folder_idx, manga_folder in enumerate(manga_folders, 1):
         image_files.extend(manga_folder.glob(ext))
     
     total_files_in_folder = len(cbz_files) + len(image_files)
-    
-    # Progress LIVELLO 1: Cartelle totali
-    folder_percent = int((folder_idx / total_folders) * 100)
-    folder_bar_length = 50
-    folder_filled = int((folder_percent / 100) * folder_bar_length)
-    folder_bar = '█' * folder_filled + '░' * (folder_bar_length - folder_filled)
-    
-    print(f'\r[{folder_bar}] {folder_percent}% - Scansionando: {manga_name[:40]:<40}', end='', flush=True, file=sys.stderr)
-    print(file=sys.stderr)  # Nuova riga per la seconda barra
-    
-    # Stampa info cartella
-    print(f"{manga_name}_FILES={total_files_in_folder}", file=sys.stderr, flush=True)
     
     folder_corrupted = []
     folder_ok_cbz = 0
@@ -252,15 +244,26 @@ for folder_idx, manga_folder in enumerate(manga_folders, 1):
         current_file_idx += 1
         global_stats['total_cbz'] += 1
         
+        # Progress LIVELLO 1: Cartelle totali
+        folder_percent = int((folder_idx / total_folders) * 100)
+        folder_bar_length = 50
+        folder_filled = int((folder_percent / 100) * folder_bar_length)
+        folder_bar = '█' * folder_filled + '░' * (folder_bar_length - folder_filled)
+        
         # Progress LIVELLO 2: File nella cartella corrente
-        file_percent = int((current_file_idx / total_files_in_folder) * 100)
+        file_percent = int((current_file_idx / total_files_in_folder) * 100) if total_files_in_folder > 0 else 0
         file_bar_length = 50
         file_filled = int((file_percent / 100) * file_bar_length)
         file_bar = '█' * file_filled + '░' * (file_bar_length - file_filled)
         
         # Nome file troncato
-        file_display = cbz_file.name[:50]
-        print(f'\r  [{file_bar}] {file_percent}% - {file_display:<50}', end='', flush=True, file=sys.stderr)
+        file_display = cbz_file.name[:45]
+        
+        # Aggiorna ENTRAMBE le righe con escape codes ANSI
+        # \033[A = muovi cursore su di 1 riga
+        # \033[K = cancella dalla posizione cursore a fine riga
+        print(f'\033[A\033[K[{folder_bar}] {folder_percent}% - Scansionando: {manga_name[:35]:<35}', file=sys.stderr)
+        print(f'\033[K  [{file_bar}] {file_percent}% ({current_file_idx}/{total_files_in_folder}) - {file_display:<45}', file=sys.stderr)
         
         try:
             with zipfile.ZipFile(str(cbz_file), 'r') as zf:
@@ -280,15 +283,24 @@ for folder_idx, manga_folder in enumerate(manga_folders, 1):
         current_file_idx += 1
         global_stats['total_images'] += 1
         
+        # Progress LIVELLO 1: Cartelle totali
+        folder_percent = int((folder_idx / total_folders) * 100)
+        folder_bar_length = 50
+        folder_filled = int((folder_percent / 100) * folder_bar_length)
+        folder_bar = '█' * folder_filled + '░' * (folder_bar_length - folder_filled)
+        
         # Progress LIVELLO 2: File nella cartella corrente
-        file_percent = int((current_file_idx / total_files_in_folder) * 100)
+        file_percent = int((current_file_idx / total_files_in_folder) * 100) if total_files_in_folder > 0 else 0
         file_bar_length = 50
         file_filled = int((file_percent / 100) * file_bar_length)
         file_bar = '█' * file_filled + '░' * (file_bar_length - file_filled)
         
         # Nome file troncato
-        file_display = img_file.name[:50]
-        print(f'\r  [{file_bar}] {file_percent}% - {file_display:<50}', end='', flush=True, file=sys.stderr)
+        file_display = img_file.name[:45]
+        
+        # Aggiorna ENTRAMBE le righe con escape codes ANSI
+        print(f'\033[A\033[K[{folder_bar}] {folder_percent}% - Scansionando: {manga_name[:35]:<35}', file=sys.stderr)
+        print(f'\033[K  [{file_bar}] {file_percent}% ({current_file_idx}/{total_files_in_folder}) - {file_display:<45}', file=sys.stderr)
         
         try:
             # Controlla che il file esista, non sia vuoto e abbia un formato immagine valido
@@ -309,10 +321,6 @@ for folder_idx, manga_folder in enumerate(manga_folders, 1):
         except Exception:
             global_stats['corrupted_images'] += 1
             folder_corrupted.append(('IMAGE', str(img_file)))
-    
-    # Cancella la seconda barra e vai a nuova riga
-    print(f'\r{" " * 120}', end='', file=sys.stderr)  # Pulisci riga
-    print('\r', end='', file=sys.stderr)  # Torna a inizio
     
     # Se ci sono problemi, segna la cartella
     if folder_corrupted:
