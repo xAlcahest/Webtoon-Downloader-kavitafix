@@ -44,13 +44,13 @@ verify_cbz_integrity() {
     echo -e "${BLUE}Trovati ${total_files} file CBZ da verificare...${NC}"
     
     # Usa Python per verifica con progress bar
-    local result=$(python3 << 'PYTHON_SCRIPT'
+    local result=$(CBZ_DIR="${cbz_dir}" python3 << 'PYTHON_SCRIPT'
 import zipfile
 import sys
 import os
 from pathlib import Path
 
-cbz_dir = sys.argv[1]
+cbz_dir = os.environ['CBZ_DIR']
 cbz_files = sorted(Path(cbz_dir).glob("*.cbz"))
 total = len(cbz_files)
 
@@ -89,7 +89,6 @@ for c in corrupted:
 
 sys.exit(0)
 PYTHON_SCRIPT
-"${cbz_dir}"
 )
     
     # Parse risultati Python
