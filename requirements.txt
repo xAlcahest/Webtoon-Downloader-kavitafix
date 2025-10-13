@@ -2,6 +2,9 @@
 # Generated from pyproject.toml
 # Python >=3.10,<4.0
 
+# NOTE: webtoon-manager-simple.sh scripts use Python standard library only:
+# - zipfile, imghdr, sys, os, pathlib (all built-in, no extra deps needed)
+
 # Core dependencies
 beautifulsoup4>=4.12.2,<5.0.0
 lxml>=5.3.1,<6.0.0
