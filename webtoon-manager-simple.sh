@@ -205,7 +205,8 @@ base_dir = Path(os.environ['CBZ_BASE_DIR'])
 manga_folders = sorted([d for d in base_dir.iterdir() if d.is_dir()])
 total_folders = len(manga_folders)
 
-print(f"TOTAL_FOLDERS={total_folders}", file=sys.stderr, flush=True)
+# Stampa numero totale cartelle
+print(f"\nTOTAL_FOLDERS={total_folders}", file=sys.stderr, flush=True)
 
 global_stats = {
     'total_cbz': 0,
@@ -220,27 +221,47 @@ global_stats = {
 for folder_idx, manga_folder in enumerate(manga_folders, 1):
     manga_name = manga_folder.name
     
-    # Progress per cartella corrente
-    percent = int((folder_idx / total_folders) * 100)
-    bar_length = 50
-    filled = int((percent / 100) * bar_length)
-    bar = '█' * filled + '░' * (bar_length - filled)
-    
-    print(f'\r[{bar}] {percent}% - Scansionando: {manga_name[:40]:<40}', end='', flush=True, file=sys.stderr)
-    
-    # Trova CBZ e immagini
+    # Trova CBZ e immagini PRIMA per sapere il totale
     cbz_files = list(manga_folder.glob("*.cbz"))
     image_files = []
     for ext in ['*.jpg', '*.jpeg', '*.png', '*.gif', '*.webp']:
         image_files.extend(manga_folder.glob(ext))
     
+    total_files_in_folder = len(cbz_files) + len(image_files)
+    
+    # Progress LIVELLO 1: Cartelle totali
+    folder_percent = int((folder_idx / total_folders) * 100)
+    folder_bar_length = 50
+    folder_filled = int((folder_percent / 100) * folder_bar_length)
+    folder_bar = '█' * folder_filled + '░' * (folder_bar_length - folder_filled)
+    
+    print(f'\r[{folder_bar}] {folder_percent}% - Scansionando: {manga_name[:40]:<40}', end='', flush=True, file=sys.stderr)
+    print(file=sys.stderr)  # Nuova riga per la seconda barra
+    
+    # Stampa info cartella
+    print(f"{manga_name}_FILES={total_files_in_folder}", file=sys.stderr, flush=True)
+    
     folder_corrupted = []
     folder_ok_cbz = 0
     folder_ok_images = 0
     
+    current_file_idx = 0
+    
     # Verifica CBZ
     for cbz_file in cbz_files:
+        current_file_idx += 1
         global_stats['total_cbz'] += 1
+        
+        # Progress LIVELLO 2: File nella cartella corrente
+        file_percent = int((current_file_idx / total_files_in_folder) * 100)
+        file_bar_length = 50
+        file_filled = int((file_percent / 100) * file_bar_length)
+        file_bar = '█' * file_filled + '░' * (file_bar_length - file_filled)
+        
+        # Nome file troncato
+        file_display = cbz_file.name[:50]
+        print(f'\r  [{file_bar}] {file_percent}% - {file_display:<50}', end='', flush=True, file=sys.stderr)
+        
         try:
             with zipfile.ZipFile(str(cbz_file), 'r') as zf:
                 result = zf.testzip()
@@ -256,7 +277,19 @@ for folder_idx, manga_folder in enumerate(manga_folders, 1):
     
     # Verifica immagini (solo che siano file validi non vuoti)
     for img_file in image_files:
+        current_file_idx += 1
         global_stats['total_images'] += 1
+        
+        # Progress LIVELLO 2: File nella cartella corrente
+        file_percent = int((current_file_idx / total_files_in_folder) * 100)
+        file_bar_length = 50
+        file_filled = int((file_percent / 100) * file_bar_length)
+        file_bar = '█' * file_filled + '░' * (file_bar_length - file_filled)
+        
+        # Nome file troncato
+        file_display = img_file.name[:50]
+        print(f'\r  [{file_bar}] {file_percent}% - {file_display:<50}', end='', flush=True, file=sys.stderr)
+        
         try:
             # Controlla che il file esista, non sia vuoto e abbia un formato immagine valido
             if img_file.stat().st_size > 0:
@@ -276,6 +309,10 @@ for folder_idx, manga_folder in enumerate(manga_folders, 1):
         except Exception:
             global_stats['corrupted_images'] += 1
             folder_corrupted.append(('IMAGE', str(img_file)))
+    
+    # Cancella la seconda barra e vai a nuova riga
+    print(f'\r{" " * 120}', end='', file=sys.stderr)  # Pulisci riga
+    print('\r', end='', file=sys.stderr)  # Torna a inizio
     
     # Se ci sono problemi, segna la cartella
     if folder_corrupted:
