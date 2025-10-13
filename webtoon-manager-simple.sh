@@ -22,6 +22,81 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "${LOG_FILE}"
 }
 
+# Funzione per verificare integrità CBZ
+verify_cbz_integrity() {
+    local cbz_dir="$1"
+    
+    if [[ ! -d "${cbz_dir}" ]]; then
+        log "WARN: Directory non trovata per verifica CBZ: ${cbz_dir}"
+        return 0
+    fi
+    
+    log "🔍 Verifica integrità CBZ in: ${cbz_dir}"
+    
+    local corrupted_files=()
+    local cbz_count=0
+    local ok_count=0
+    
+    # Trova tutti i file CBZ
+    while IFS= read -r cbz_file; do
+        ((cbz_count++))
+        local basename=$(basename "$cbz_file")
+        
+        # Test 1: Verifica che il file sia un archivio ZIP valido
+        if ! unzip -t "$cbz_file" &>/dev/null; then
+            log "✗ CBZ corrotto (zip test failed): ${basename}"
+            corrupted_files+=("$cbz_file")
+            continue
+        fi
+        
+        # Test 2: Verifica che contenga almeno 1 immagine
+        local image_count=$(unzip -l "$cbz_file" 2>/dev/null | grep -iE '\.(jpg|jpeg|png|webp|gif)$' | wc -l)
+        if [[ ${image_count} -lt 1 ]]; then
+            log "✗ CBZ corrotto (0 immagini): ${basename}"
+            corrupted_files+=("$cbz_file")
+            continue
+        fi
+        
+        # Test 3: Verifica dimensione minima (es: 1 MB)
+        local file_size=$(stat -c%s "$cbz_file" 2>/dev/null || stat -f%z "$cbz_file" 2>/dev/null)
+        if [[ ${file_size} -lt 1048576 ]]; then
+            log "⚠️  CBZ sospetto (< 1 MB): ${basename} (${file_size} bytes, ${image_count} immagini)"
+            # Non lo contiamo come corrotto, ma lo segnaliamo
+        fi
+        
+        ((ok_count++))
+    done < <(find "${cbz_dir}" -maxdepth 1 -type f -name "*.cbz" 2>/dev/null)
+    
+    if [[ ${cbz_count} -eq 0 ]]; then
+        log "Nessun file CBZ trovato per verifica"
+        return 0
+    fi
+    
+    log "Verifica completata: ${ok_count}/${cbz_count} CBZ validi"
+    
+    if [[ ${#corrupted_files[@]} -gt 0 ]]; then
+        echo -e "${RED}⚠️  ATTENZIONE: ${#corrupted_files[@]} file CBZ corrotti trovati!${NC}"
+        log "File CBZ corrotti trovati: ${#corrupted_files[@]}"
+        
+        for corrupted in "${corrupted_files[@]}"; do
+            log "  - $(basename "$corrupted")"
+            # Sposta i file corrotti in una cartella di backup
+            local backup_dir="${cbz_dir}/.corrupted"
+            mkdir -p "${backup_dir}"
+            mv "$corrupted" "${backup_dir}/" 2>/dev/null && \
+                log "  → Spostato in: ${backup_dir}/"
+        done
+        
+        echo -e "${YELLOW}💡 File corrotti spostati in: ${cbz_dir}/.corrupted${NC}"
+        echo -e "${YELLOW}   Puoi riscaricarli manualmente con --start e --end${NC}"
+        
+        return 1
+    else
+        echo -e "${GREEN}✓ Tutti i ${cbz_count} file CBZ sono integri${NC}"
+        return 0
+    fi
+}
+
 # Funzione per stampare help
 show_help() {
     echo -e "${BLUE}Webtoon Manager - Download e monitoraggio automatico${NC}"
@@ -30,6 +105,7 @@ show_help() {
     echo "  $0 download <URL> [opzioni]     - Scarica webtoon (aggiunge automaticamente al monitoraggio)"
     echo "  $0 list-monitored               - Lista URLs monitorati automaticamente"
     echo "  $0 remove-monitor <URL>         - Rimuove URL dal monitoraggio automatico"
+    echo "  $0 verify-cbz <cartella>        - Verifica integrità file CBZ in una cartella"
     echo "  $0 setup-cron                   - Configura il cron job di sistema (ogni 6 ore)"
     echo "  $0 remove-cron                  - Rimuove il cron job di sistema"
     echo "  $0 check-updates                - Controlla aggiornamenti manualmente (solo --latest)"
@@ -46,10 +122,12 @@ show_help() {
     echo "Logica:"
     echo "  - Il download manuale scarica TUTTI gli episodi e aggiunge la serie al monitoraggio"
     echo "  - Il monitoraggio automatico (cron) scarica solo gli episodi NUOVI (--latest)"
+    echo "  - Dopo ogni download viene verificata l'integrità dei CBZ"
     echo ""
     echo "Esempi:"
     echo "  $0 download 'https://www.webtoons.com/en/fantasy/tower-of-god/list?title_no=95' --format cbz"
     echo "  $0 download 'URL' --concurrent-chapters 5 --concurrent-images 20 --quality 90"
+    echo "  $0 verify-cbz './downloads/Down To Earth'  # Verifica CBZ esistenti"
     echo "  $0 setup-cron  # Configura controllo automatico ogni 6 ore"
     echo "  $0 list-monitored  # Vedi quali serie sono monitorate"
     echo ""
@@ -391,6 +469,9 @@ download_webtoon() {
     if /root/.local/bin/poetry run webtoon-downloader "${url}" --out "${series_dir}" "${all_args[@]}"; then
         log "✓ Download completato: ${url}"
         
+        # Verifica integrità dei CBZ scaricati
+        verify_cbz_integrity "${series_dir}"
+        
         # Aggiungi automaticamente al monitoraggio per futuri --latest
         add_to_monitoring_internal "${url}" "${extra_args[@]}"
         
@@ -541,6 +622,10 @@ check_updates() {
             # Deve essere l'ULTIMO argomento, dopo tutti i flag
             if /root/.local/bin/poetry run webtoon-downloader "${update_args[@]}" ${args} "${url}"; then
                 log "✓ Controllo episodi completato per serie #${series_count}"
+                
+                # Verifica integrità CBZ scaricati nel monitoraggio automatico
+                verify_cbz_integrity "${series_dir}"
+                
                 new_episodes_found=true
             else
                 log "✗ Errore durante controllo serie #${series_count}: ${url}"
@@ -615,6 +700,16 @@ main() {
         "remove-monitor")
             shift
             remove_from_monitoring "$1"
+            ;;
+        "verify-cbz")
+            shift
+            local folder_path="$1"
+            if [[ -z "${folder_path}" ]]; then
+                echo -e "${RED}Errore: Specifica la cartella da verificare${NC}"
+                echo "Esempio: $0 verify-cbz './downloads/Down To Earth'"
+                exit 1
+            fi
+            verify_cbz_integrity "${folder_path}"
             ;;
         "check-updates")
             check_updates
