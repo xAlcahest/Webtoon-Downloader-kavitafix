@@ -33,33 +33,79 @@ verify_cbz_integrity() {
     
     log "🔍 Verifica integrità CBZ in: ${cbz_dir}"
     
-    local corrupted_files=()
-    local cbz_count=0
-    local ok_count=0
+    # Conta prima i file totali per la progress bar
+    local total_files=$(find "${cbz_dir}" -maxdepth 1 -type f -name "*.cbz" 2>/dev/null | wc -l)
     
-    # Trova tutti i file CBZ
-    while IFS= read -r cbz_file; do
-        ((cbz_count++))
-        local basename=$(basename "$cbz_file")
-        
-        # Test con Python zipfile - più tollerante di unzip
-        if python3 -c "
+    if [[ ${total_files} -eq 0 ]]; then
+        log "Nessun file CBZ trovato per verifica"
+        return 0
+    fi
+    
+    echo -e "${BLUE}Trovati ${total_files} file CBZ da verificare...${NC}"
+    
+    # Usa Python per verifica con progress bar
+    local result=$(python3 << 'PYTHON_SCRIPT'
 import zipfile
 import sys
-try:
-    with zipfile.ZipFile('$cbz_file', 'r') as zf:
-        result = zf.testzip()
-        if result is not None:
-            sys.exit(1)
-except Exception:
-    sys.exit(1)
-" 2>/dev/null; then
-            ((ok_count++))
-        else
-            log "✗ CBZ corrotto (non leggibile come ZIP): ${basename}"
-            corrupted_files+=("$cbz_file")
+import os
+from pathlib import Path
+
+cbz_dir = sys.argv[1]
+cbz_files = sorted(Path(cbz_dir).glob("*.cbz"))
+total = len(cbz_files)
+
+corrupted = []
+ok_count = 0
+
+for idx, cbz_file in enumerate(cbz_files, 1):
+    # Progress bar
+    percent = int((idx / total) * 100)
+    bar_length = 40
+    filled = int((percent / 100) * bar_length)
+    bar = '█' * filled + '░' * (bar_length - filled)
+    
+    # Stampa progress (usa \r per sovrascrivere la stessa riga)
+    print(f'\r[{bar}] {percent}% ({idx}/{total}) - Verificando: {cbz_file.name[:50]:<50}', end='', flush=True)
+    
+    # Verifica integrità
+    try:
+        with zipfile.ZipFile(str(cbz_file), 'r') as zf:
+            result = zf.testzip()
+            if result is not None:
+                corrupted.append(str(cbz_file))
+            else:
+                ok_count += 1
+    except Exception:
+        corrupted.append(str(cbz_file))
+
+# Nuova riga dopo progress bar
+print()
+
+# Output risultati per bash
+print(f"OK_COUNT={ok_count}")
+print(f"TOTAL_COUNT={total}")
+for c in corrupted:
+    print(f"CORRUPTED:{c}")
+
+sys.exit(0)
+PYTHON_SCRIPT
+"${cbz_dir}"
+)
+    
+    # Parse risultati Python
+    local corrupted_files=()
+    local ok_count=0
+    local cbz_count=0
+    
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^OK_COUNT=([0-9]+)$ ]]; then
+            ok_count="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^TOTAL_COUNT=([0-9]+)$ ]]; then
+            cbz_count="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^CORRUPTED:(.+)$ ]]; then
+            corrupted_files+=("${BASH_REMATCH[1]}")
         fi
-    done < <(find "${cbz_dir}" -maxdepth 1 -type f -name "*.cbz" 2>/dev/null)
+    done <<< "$result"
     
     if [[ ${cbz_count} -eq 0 ]]; then
         log "Nessun file CBZ trovato per verifica"
